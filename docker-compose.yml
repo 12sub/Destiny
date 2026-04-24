@@ -1,0 +1,20 @@
+version: '3.8'
+services:
+  destiny-monitor:
+    build: .
+    container_name: destiny_engine
+    network_mode: "host" # Required for packet sniffing/ARP
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    volumes:
+      - ./logs:/app/logs
+    command: ["monitor", "-i", "eth0", "--proxy"]
+    restart: always
+
+  destiny-web:
+    image: destiny_engine
+    network_mode: "host"
+    ports:
+      - "8080:8080"
+      - "8888:8888" # Proxy Port
