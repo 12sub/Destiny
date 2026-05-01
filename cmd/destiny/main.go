@@ -206,11 +206,10 @@ func main() {
 
 	rootCmd.AddCommand(scanCmd)
 
-	rootCmd.AddCommand(fuzzCmd)
-
 	rootCmd.AddCommand(sshCmd)
 	rootCmd.AddCommand(infoCmd)
 	rootCmd.AddCommand(netstatCmd)
+	rootCmd.AddCommand(fuzzCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
