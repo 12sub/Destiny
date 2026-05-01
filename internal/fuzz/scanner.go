@@ -18,7 +18,7 @@ type Result struct {
 // StartFuzzer runs discovery Logic
 func StartFuzzer(target string, wordlist []string, workers int, mode string) {
 	// Ensure the target has a protocol
-	if !string.HasPrefix(target, "http") {
+	if !strings.HasPrefix(target, "http") {
 		target = "http://" + target
 	}
 	jobs := make(chan string, len(wordlist))
@@ -28,7 +28,7 @@ func StartFuzzer(target string, wordlist []string, workers int, mode string) {
 	// Start workers
 	for w := 0; w < workers; w++ {
 		wg.Add(1)
-		go func {
+		go func() {
 			defer wg.Done()
 			client := &http.Client{Timeout: 3 * time.Second}
 			for path := range jobs {

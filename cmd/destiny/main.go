@@ -94,58 +94,64 @@ func main() {
 
 	var scanCmd = &cobra.Command{
 		Use:   "scan [cidr]",
-		Short: "Scan the network for available devices",
+		Short: "Scan the network and identify open ports",
 		Args:  cobra.MinimumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			cidr := args[0]
-			
-			// 1. Get the list of IPs to scan
-			targetIPs, err := scanner.GetIPsFromCIDR(cidr)
-			if err != nil {
-				fmt.Printf("Error parsing CIDR: %v\n", err)
-				return
-			}
-		targetIface := "eno1"
-		if len(iface) > 0 {
-			targetIface = iface[0]
-		}
+			targetIface, _ := cmd.Flags().GetString("interface")
 
-			// 2. Open PCAP Handle
-			handle, err := pcap.OpenLive(targetIface, 65536, true, pcap.BlockForever)
+			// Safety Check: If flag is empty, default to a common one or eno1
+			if targetIface == "" {
+				fmt.Println("🔍 No interface specified. Searching for active interface...")
+				discovered, err := scanner.GetAutoInterface()
+				if err != nil {
+					fmt.Printf("❌ Discovery Failed: %v\n", err)
+					return
+				}
+				targetIface = discovered
+				fmt.Printf("✅ Discovered interface: %s\n", targetIface) // Or whatever your primary interface is
+				}
+
+			// 1. DYNAMICALLY get your local IP and MAC
+			myIP, myMAC, err := scanner.GetInterfaceDetails(targetIface)
 			if err != nil {
-				fmt.Printf("Error opening interface: %v\n", err)
+				fmt.Printf("❌ Error detecting interface details: %v\n", err)
 				return
 			}
+
+			targetIPs, _ := scanner.GetIPsFromCIDR(cidr)
+			handle, _ := pcap.OpenLive(targetIface, 65536, true, pcap.BlockForever)
 			defer handle.Close()
 
-			fmt.Printf("🚀 Scanning %d IPs on %s...\n", len(targetIPs), targetIface)
+			fmt.Printf("🚀 Interface: %s | Local IP: %s | Local MAC: %s\n", targetIface, myIP, myMAC)
 
-			// 3. Start a Listener Goroutine for ARP Replies
+			// 2. Listener for ARP Replies + Chained Port Scan
 			go func() {
 				source := gopacket.NewPacketSource(handle, handle.LinkType())
 				for packet := range source.Packets() {
 					if arpLayer := packet.Layer(layers.LayerTypeARP); arpLayer != nil {
 						arp := arpLayer.(*layers.ARP)
 						if arp.Operation == layers.ARPReply {
-							fmt.Printf("[+] Found: %s (%s)\n", 
-								net.IP(arp.SourceProtAddress), 
-								net.HardwareAddr(arp.SourceHwAddress))
+							hostIP := net.IP(arp.SourceProtAddress).String()
+							fmt.Printf("\n[+] Host Found: %s (%s)\n", hostIP, net.HardwareAddr(arp.SourceHwAddress))
+							
+							// CHAIN: If host found, scan common ports
+							fmt.Printf("    🔍 Scanning ports for %s...\n", hostIP)
+							open := scanner.ScanPorts(hostIP, 500*time.Millisecond)
+							if len(open) > 0 {
+								fmt.Printf("    🔓 Open Ports: %v\n", open)
+							}
 						}
 					}
 				}
 			}()
 
-			// 4. Send Requests (Need your local IP/MAC for the 'Source' fields)
-			// For brevity, ensure you replace these with your actual local details
-			myIP := net.ParseIP("192.168.5.17") 
-			myMAC, _ := net.ParseMAC("00:11:22:33:44:55")
-
+			// 3. Send Requests using the dynamic local details
 			for _, target := range targetIPs {
 				scanner.SendARPRequest(handle, myMAC, myIP, target)
 			}
 			
-			// Give the listener time to catch final replies
-			time.Sleep(2 * time.Second)
+			time.Sleep(3 * time.Second)
 		},
 	}
 	var sshCmd = &cobra.Command{
@@ -210,6 +216,8 @@ func main() {
 	rootCmd.AddCommand(infoCmd)
 	rootCmd.AddCommand(netstatCmd)
 	rootCmd.AddCommand(fuzzCmd)
+
+	
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
