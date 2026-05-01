@@ -21,12 +21,17 @@ import (
 	"destiny/internal/auth"
 	"destiny/internal/proxy"
 	"destiny/internal/sysinfo"
+	"destiny/internal/fuzz"
 	"destiny/pkg/models"
 )
 
 var (
 	iface []string
 	proxyActive bool
+	fuzzTarget   string
+	fuzzWordlist string
+	fuzzMode     string
+	threads      int
 )
 
 func main() {
@@ -173,6 +178,25 @@ func main() {
 		},
 	}
 
+	var fuzzCmd = &cobra.Command{
+		Use:   "fuzz",
+		Short: "Locate subdirectories, APIs, and file structures",
+		Run: func(cmd *cobra.Command, args []string) {
+			// Use default wordlist if none provided
+			// For a NOC tool, you'd usually load this from a file
+			commonPaths := []string{"admin", "api", "v1", "v2", "config", "backup", "index.php", ".env", "swagger.json"}
+			
+			fmt.Printf("🎯 Starting %s discovery on %s...\n", fuzzMode, fuzzTarget)
+			fuzz.StartFuzzer(fuzzTarget, commonPaths, threads, fuzzMode)
+		},
+	}
+
+	// command flags for fuzzing
+	fuzzCmd.Flags().StringVarP(&fuzzTarget, "target", "t", "", "Target IP or Domain (required)")
+	fuzzCmd.Flags().StringVarP(&fuzzMode, "mode", "m", "all", "Discovery mode: dir, api, file, all")
+	fuzzCmd.Flags().IntVarP(&threads, "threads", "n", 10, "Number of concurrent workers")
+	fuzzCmd.MarkFlagRequired("target")
+
 	monitorCmd.Flags().StringSliceVarP(&iface, "interface", "i", []string{"eno1"}, "Network interfaces to monitor")
 	monitorCmd.Flags().BoolVarP(&proxyActive, "proxy", "x", false, "Start the transparent proxy alongside monitoring")
 
@@ -181,6 +205,8 @@ func main() {
 	rootCmd.AddCommand(monitorCmd)
 
 	rootCmd.AddCommand(scanCmd)
+
+	rootCmd.AddCommand(fuzzCmd)
 
 	rootCmd.AddCommand(sshCmd)
 	rootCmd.AddCommand(infoCmd)
