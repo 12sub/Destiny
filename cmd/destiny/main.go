@@ -81,6 +81,9 @@ func main() {
 				}
 			}()
 
+			// Inside monitorCmd Run block
+			go storage.LogToJSON(packetChan, "logs/capture.dbg")
+
 			// // Start Sniffer Producer [cite: 17]
 			// for _, i := range iface{
 			// 	go func(ifaceName string) {

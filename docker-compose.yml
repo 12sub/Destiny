@@ -1,4 +1,3 @@
-version: '3.8'
 services:
   destiny-monitor:
     build: .
@@ -18,3 +17,25 @@ services:
     ports:
       - "8080:8080"
       - "8888:8888" # Proxy Port
+  
+  # Log Aggregator
+  loki:
+    image: grafana/loki:latest
+    ports:
+      - "3100:3100"
+
+  # Log Shipper (reads your .dbg file and sends to Loki)
+  promtail:
+    image: grafana/promtail:latest
+    volumes:
+      - ./logs:/var/log/destiny
+      - ./promtail-config.yml:/etc/promtail/config.yml
+    command: -config.file=/etc/promtail/config.yml
+
+  # Visualization
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin

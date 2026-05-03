@@ -1,14 +1,23 @@
-# Build Stage
-FROM golang:1.21-bullseye AS builder
-RUN apt-get update && apt-get install -y libpcap-dev
-WORKDIR /app
-COPY . .
-RUN go mod download
-RUN go build -o /destiny cmd/destiny/main.go
+FROM golang:1.26-alpine AS builder
 
-# Run Stage
-FROM debian:bullseye-slim
-RUN apt-get update && apt-get install -y libpcap0.8 && rm -rf /var/lib/apt/lists/*
-COPY --from=builder /destiny /usr/local/bin/destiny
-# Destiny needs raw network access
-ENTRYPOINT ["destiny"]
+# 1. Install build tools and libpcap headers
+RUN apk add --no-cache gcc musl-dev libpcap-dev
+
+WORKDIR /app
+
+# 2. Copy go.mod and go.sum first for better caching
+COPY go.mod go.sum ./
+RUN go mod download
+
+# 3. Copy the rest of the source
+COPY . .
+
+# 4. Build the binary with CGO enabled (required for gopacket)
+RUN CGO_ENABLED=1 GOOS=linux go build -o destiny ./cmd/destiny/main.go
+
+# 5. Final Stage (Smaller Image)
+FROM alpine:latest
+RUN apk add --no-cache libpcap
+WORKDIR /app
+COPY --from=builder /app/destiny .
+ENTRYPOINT ["./destiny"]

@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"encoding/json"
 	"net"
 	"os"
 	"fmt"
@@ -10,6 +11,16 @@ import (
 
 	"destiny/pkg/models"
 )
+
+// LogEntry is the structured format for Grafana/Loki
+type LogEntry struct {
+	Timestamp string `json:"ts"`
+	Level     string `json:"level"`
+	Target    string `json:"target"`
+	Protocol  string `json:"proto"`
+	Info      string `json:"info"`
+	Source    string `json:"src"`
+}
 
 // LogToDebugFile appends packet info to custom .dbg file
 func LogToDebugFile(packetChan <-chan models.PacketInfo, filename string) {
@@ -54,4 +65,27 @@ func findProcessByPort(sourceStr string) (int32, string) {
 		}
 	}
 	return 0, ""
+}
+
+func LogToJSON(packetChan <-chan models.PacketInfo, filename string) {
+	file, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		fmt.Printf("❌ Failed to open log file: %v\n", err)
+		return
+	}
+	defer file.Close()
+
+	for p := range packetChan {
+		entry := LogEntry{
+			Timestamp: p.Timestamp,
+			Level:     "info",
+			Target:    p.Dest,
+			Protocol:  p.Protocol,
+			Info:      p.Info,
+			Source:    p.Source,
+		}
+
+		jsonData, _ := json.Marshal(entry)
+		file.WriteString(string(jsonData) + "\n")
+	}
 }
